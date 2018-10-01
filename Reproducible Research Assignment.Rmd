@@ -1,0 +1,132 @@
+---
+title: "Reproducible Research Assignment"
+output: html_document
+---
+##Loading the Data
+```{r}
+library(knitr)
+```
+
+Download the Activity Monitoring data file.
+```{r}
+if(!file.exists("activity.csv")) {
+        tempfile <- tempfile()
+        download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",destfile = tempfile)
+        unzip(tempfile)
+        unlink(tempfile)
+}
+```
+
+Load the Activity Monitoring data file.
+```{r}
+activitydata <- read.csv("activity.csv")
+```
+
+Summary of raw Activity Monitoring data file.
+```{r}
+summary(activitydata)
+```
+
+##Summary Statistics for Daily Steps
+Number of total steps taken per day, excluding missing values:
+```{r}
+dailysteps <- aggregate(steps ~ date, data=activitydata, FUN=sum, na.rm=TRUE)
+dailysteps
+```
+
+Histogram of the total number of steps taken each day.
+```{r}
+hist(dailysteps$steps, xlab="Number of Steps per Day", col="blue", main = "Total number of steps taken each day")
+```
+
+```{r}
+meansteps <- mean(dailysteps$steps)
+meansteps <- format(meansteps, digits=1)
+```
+Mean number of steps taken per day: `r meansteps`
+
+
+```{r}
+mediansteps <- median(dailysteps$steps)
+mediansteps <- format(mediansteps, digits=1)
+```
+Median number of steps taken per day: `r mediansteps`
+
+
+##Average Daily Activity Pattern
+```{r}
+meandailysteps <- aggregate(steps ~ interval, data=activitydata, FUN=mean, na.rm=TRUE)
+plot(meandailysteps$interval, meandailysteps$steps, type="l", xlab="Time Intervals", ylab="Total Steps per 5-min Interval", main="Mean Number of Steps per 5-Minute Interval")
+```
+
+Maximum number of steps within 5-minute interval:
+```{r}
+maxsteps <- max(meandailysteps$steps)
+maxinterval <- meandailysteps$interval[which.max(meandailysteps$steps)]
+```
+Maximum number of steps within 5-minute interval: `r maxsteps`.
+The 5-min interval containing the maximum number of steps is `r maxinterval`.
+
+##Missing Value Imputation
+Total number of missing 'steps' values in Activity Monitoring data:
+```{r}
+sum(is.na(activitydata))
+```
+
+Data exploration of missing values in Steps and Dates 
+```{r}
+naTRUEdata <- subset(activitydata, is.na(steps))
+par(mfrow=c(2,1), mar=c(2,2,1,1))
+hist(naTRUEdata$interval, main="Missing Values per Interval")
+hist(as.numeric(naTRUEdata$date), main="Missing Values per Date", breaks=61)
+```
+
+Imputing missing values using mean of intervals.
+```{r}
+avgstepsinterval <- tapply(activitydata$steps, activitydata$interval, mean, na.rm=TRUE)
+activity_NA <- activitydata[is.na(activitydata$steps),]
+activity_noNA <- activitydata[!is.na(activitydata$steps),]
+activity_NA$steps <- as.factor(activity_NA$interval)
+levels(activity_NA$steps) <- avgstepsinterval
+levels(activity_NA$steps) <- round(as.numeric(levels(activity_NA$steps)))
+activity_NA$steps <- as.integer(as.vector(activity_NA$steps))
+imputed_activitydata <- rbind(activity_NA, activity_noNA)
+```
+
+Histogram of total number of steps taken each data using imputed mean step values.
+```{r}
+newdailysteps <- aggregate(steps ~ date, data=imputed_activitydata, FUN=sum, na.rm=TRUE)
+hist(newdailysteps$steps, xlab="Number of Steps per Day", col="green", main = "Total number of steps taken each day (with imputed values)")
+```
+
+Comparison of mean and median for original Activity data and imputed Activity data.
+```{r kable, results = 'asis'}
+newmeansteps <- mean(newdailysteps$steps)
+newmediansteps <- median(newdailysteps$steps)
+newmeansteps <- format(newmeansteps, digits=1)
+newmediansteps <- format(newmediansteps, digits=1)
+summarysteps <- data.frame(c(meansteps, mediansteps), c(newmeansteps, newmediansteps))
+colnames(summarysteps) <- c("Original Data", "Imputed Data")
+rownames(summarysteps) <- c("Mean", "Median")
+kable(summarysteps, format="markdown", digits=1)
+```
+
+The mean steps in the original data is the same as the mean steps in the imputed data.
+The median steps in the original data is larger than the median steps in the imputed data.
+Imputing mean steps for missing values does not change the mean but decreases the median.
+
+
+##Weekday and Weekend Patterns
+Indicator variable for weekdays and weekends.
+```{r}
+imputed_activityday <- ifelse(weekdays(as.Date(imputed_activitydata$date)) == "Saturday" | weekdays(as.Date(imputed_activitydata$date)) == "Sunday", "weekend", "weekday")
+```
+
+Time series plot of 5-minute intervals and average number of steps, by weekday or weekend.
+```{r}
+weekendsteps <- tapply(imputed_activitydata[imputed_activityday == "weekend" ,]$steps, imputed_activitydata[imputed_activityday == "weekend" ,]$interval, mean, na.rm=TRUE)
+weekdaysteps <- tapply(imputed_activitydata[imputed_activityday == "weekday" ,]$steps, imputed_activitydata[imputed_activityday == "weekday" ,]$interval, mean, na.rm=TRUE)
+par(mfrow=c(1,2), cex.main=1)
+plot(as.numeric(names(weekdaysteps)), weekdaysteps, xlab = "5-min Interval", ylab = "Steps", main="Weekday Average Number of Steps", type="l")
+plot(as.numeric(names(weekendsteps)), weekendsteps, xlab = "5-min Interval", ylab = "Steps", main="Weekend Average Number of Steps", type="l")
+```
